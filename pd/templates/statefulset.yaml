@@ -49,8 +49,6 @@ spec:
         resources:
 {{ toYaml .Values.resources | indent 10 }}          
         env:
-        - name: INITIAL_CLUSTER_SIZE
-          value: {{ .Values.replicas | quote }}
         - name: SET_NAME
           value: {{ template "pd.fullname" . }}
 {{- if .Values.extraEnv }}
@@ -59,43 +57,23 @@ spec:
         volumeMounts:
         - name: datadir
           mountPath: /var/run/pd
-        lifecycle:
-          preStop:
-            exec:
-              command:
-                - "/bin/sh"
-                - "-ec"
-                - |
-                  HOSTNAME=$(hostname)
-                 
-                  SET_ID=${HOSTNAME##*[^0-9]}
-
-                  if [ "${SET_ID}" -ge ${INITIAL_CLUSTER_SIZE} ]; then
-                      echo "Removing ${HOSTNAME} from PD cluster"
-                      /pd-ctl -d -u ${SET_NAME}-0.${SET_NAME}:2379 member delete name ${HOSTNAME} 
-                      if [ $? -eq 0 ]; then
-                          # Remove everything otherwise the cluster will no longer scale-up
-                          rm -rf /var/run/pd/*
-                      fi
-                  fi
         command:
           - "/bin/sh"
           - "-ec"
           - |
             HOSTNAME=$(hostname)
 
-            # we should wait for other pods to be up before trying to join
-            # otherwise we got "no such host" errors when trying to resolve other members
-            for i in $(seq 0 $((${INITIAL_CLUSTER_SIZE} - 1))); do
+            # PD-SET_ID
+            SET_ID=${HOSTNAME##*[^0-9]}
+
+            # we should wait node 0 and ourselves to be up at first
+            for i in 0 ${SET_ID}; do
                 while true; do
                     echo "Waiting for ${SET_NAME}-${i}.${SET_NAME} to come up"
                     ping -W 1 -c 1 ${SET_NAME}-${i}.${SET_NAME} > /dev/null && break
                     sleep 2s
                 done
             done
-
-            # PD-SET_ID
-            SET_ID=${HOSTNAME##*[^0-9]}
 
             if [ ${SET_ID} -eq 0 ]; then
               # The first node, use initial way 
