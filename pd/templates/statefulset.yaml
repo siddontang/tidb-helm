@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "pd.fullname" . }}
+  labels:
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    app: {{ template "pd.name" . }}
+spec:
+  serviceName: {{ template "pd.fullname" . }}
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      heritage: {{ .Release.Service | quote }}
+      release: {{ .Release.Name | quote }}
+      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+      app: {{ template "pd.name" . }}
+  template:
+    metadata:
+      name: {{ template "pd.fullname" . }}
+      labels:
+        heritage: {{ .Release.Service | quote }}
+        release: {{ .Release.Name | quote }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        app: {{ template "pd.name" . }}
+    spec:
+{{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+{{- end }}
+{{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
+{{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+{{- end }}
+      containers:
+      - name: {{ template "pd.fullname" . }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: {{ .Values.peerPort }}
+          name: peer
+        - containerPort: {{ .Values.clientPort }}
+          name: client
+        resources:
+{{ toYaml .Values.resources | indent 10 }}          
+        env:
+        - name: INITIAL_CLUSTER_SIZE
+          value: {{ .Values.replicas | quote }}
+        - name: SET_NAME
+          value: {{ template "pd.fullname" . }}
+{{- if .Values.extraEnv }}
+{{ toYaml .Values.extraEnv | indent 8 }}
+{{- end }}
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/run/pd
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - "/bin/sh"
+                - "-ec"
+                - |
+                  HOSTNAME=$(hostname)
+                 
+                  SET_ID=${HOSTNAME##*[^0-9]}
+
+                  if [ "${SET_ID}" -ge ${INITIAL_CLUSTER_SIZE} ]; then
+                      echo "Removing ${HOSTNAME} from PD cluster"
+                      /pd-ctl -d -u ${SET_NAME}-0.${SET_NAME}:2379 member delete name ${HOSTNAME} 
+                      if [ $? -eq 0 ]; then
+                          # Remove everything otherwise the cluster will no longer scale-up
+                          rm -rf /var/run/pd/*
+                      fi
+                  fi
+        command:
+          - "/bin/sh"
+          - "-ec"
+          - |
+            HOSTNAME=$(hostname)
+
+            # we should wait for other pods to be up before trying to join
+            # otherwise we got "no such host" errors when trying to resolve other members
+            for i in $(seq 0 $((${INITIAL_CLUSTER_SIZE} - 1))); do
+                while true; do
+                    echo "Waiting for ${SET_NAME}-${i}.${SET_NAME} to come up"
+                    ping -W 1 -c 1 ${SET_NAME}-${i}.${SET_NAME} > /dev/null && break
+                    sleep 2s
+                done
+            done
+
+            # PD-SET_ID
+            SET_ID=${HOSTNAME##*[^0-9]}
+
+            if [ ${SET_ID} -eq 0 ]; then
+              # The first node, use initial way 
+              echo "Initializing ${SET_NAME}-0"
+              exec /pd-server --name ${HOSTNAME} \
+                --peer-urls http://0.0.0.0:2380 \
+                --advertise-peer-urls http://${HOSTNAME}.${SET_NAME}:2380 \
+                --client-urls http://0.0.0.0:2379 \
+                --advertise-client-urls http://${HOSTNAME}.${SET_NAME}:2379 \
+                --initial-cluster ${HOSTNAME}=http://${HOSTNAME}.${SET_NAME}:2380 \
+                --data-dir /var/run/pd/default.pd
+            else
+              # Other nodes      
+              while true; do
+                echo "Waiting for ${SET_NAME}-0.${SET_NAME} to bootstrap"
+                /pd-ctl -u ${SET_NAME}-0.${SET_NAME}:2379 member list > /dev/null && break
+                sleep 2s
+              done
+
+              echo "Starting ${HOSTNAME}, try to join ${SET_NAME}-0"
+              exec /pd-server --name ${HOSTNAME} \
+                --peer-urls http://0.0.0.0:2380 \
+                --advertise-peer-urls http://${HOSTNAME}.${SET_NAME}:2380 \
+                --client-urls http://0.0.0.0:2379 \
+                --advertise-client-urls http://${HOSTNAME}.${SET_NAME}:2379 \
+                --data-dir /var/run/pd/default.pd \
+                --join http://${SET_NAME}-0.${SET_NAME}:2379
+            fi
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          # upstream recommended max is 700M
+          storage: "{{ .Values.persistentVolume.storage }}"
+    {{- if .Values.persistentVolume.storageClass }}
+    {{- if (eq "-" .Values.persistentVolume.storageClass) }}
+      storageClassName: ""
+    {{- else }}
+      storageClassName: "{{ .Values.persistentVolume.storageClass }}"
+    {{- end }}
+    {{- end }}
