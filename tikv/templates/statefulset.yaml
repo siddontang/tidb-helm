@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "tikv.fullname" . }}
+  labels:
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    app: {{ template "tikv.name" . }}
+spec:
+  serviceName: {{ template "tikv.fullname" . }}
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      heritage: {{ .Release.Service | quote }}
+      release: {{ .Release.Name | quote }}
+      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+      app: {{ template "tikv.name" . }}
+  template:
+    metadata:
+      name: {{ template "tikv.fullname" . }}
+      labels:
+        heritage: {{ .Release.Service | quote }}
+        release: {{ .Release.Name | quote }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        app: {{ template "tikv.name" . }}
+    spec:
+{{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+{{- end }}
+{{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
+{{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+{{- end }}
+      containers:
+      - name: {{ template "tikv.fullname" . }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: {{ .Values.serverPort }}
+          name: server
+        - containerPort: {{ .Values.statusPort }}
+          name: status
+        resources:
+{{ toYaml .Values.resources | indent 10 }}          
+        env:
+        - name: PD
+          value: {{ .Values.pd }} 
+        - name: INITIAL_CLUSTER_SIZE
+          value: {{ .Values.replicas | quote }}
+        - name: SET_NAME
+          value: {{ template "tikv.fullname" . }}
+{{- if .Values.extraEnv }}
+{{ toYaml .Values.extraEnv | indent 8 }}
+{{- end }}
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/run/tikv
+        command:
+          - "/bin/sh"
+          - "-ec"
+          - |
+            HOSTNAME=$(hostname)
+
+            # TiKV-SET_ID
+            SET_ID=${HOSTNAME##*[^0-9]}
+
+            echo "Starting ${SET_NAME}-0"
+            exec /tikv-server --addr=0.0.0.0:20160 \
+              --advertise-addr=${HOSTNAME}.${SET_NAME}:20160 \
+              --status-addr=0.0.0.0:20180 \
+              --pd=${PD} \
+              --data-dir /var/run/tikv
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          # upstream recommended max is 700M
+          storage: "{{ .Values.persistentVolume.storage }}"
+    {{- if .Values.persistentVolume.storageClass }}
+    {{- if (eq "-" .Values.persistentVolume.storageClass) }}
+      storageClassName: ""
+    {{- else }}
+      storageClassName: "{{ .Values.persistentVolume.storageClass }}"
+    {{- end }}
+    {{- end }}
