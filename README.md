@@ -205,3 +205,13 @@ kubectl exec -ti pd-0 -- sh -c '/pd-ctl -d -u pd-0.pd:2379 store | jq ".stores[]
 {"id":5,"addr":"tikv-1.tikv:20160","state":"Up"}
 {"id":8,"addr":"tikv-3.tikv:20160","state":"Up"}
 ```
+
+## Clean up
+
+```bash
+helm delete tidb --purge
+helm delete tikv --purge 
+helm delete pd --purge 
+
+kubectl delete pvc -l cluster=tidb-cluster
+```
