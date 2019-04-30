@@ -7,6 +7,7 @@ metadata:
     chart: {{ template "tidb.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
+    cluster: {{ .Values.cluster }}
 spec:
   type: NodePort
   ports:
@@ -17,3 +18,4 @@ spec:
   selector:
     app: {{ template "tidb.name" . }}
     release: {{ .Release.Name }}
+    cluster: {{ .Values.cluster }}

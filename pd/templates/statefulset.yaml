@@ -7,23 +7,22 @@ metadata:
     release: {{ .Release.Name | quote }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
     app: {{ template "pd.name" . }}
+    cluster: {{ .Values.cluster }}
 spec:
   serviceName: {{ template "pd.fullname" . }}
   replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      heritage: {{ .Release.Service | quote }}
       release: {{ .Release.Name | quote }}
-      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
       app: {{ template "pd.name" . }}
+      cluster: {{ .Values.cluster }}
   template:
     metadata:
       name: {{ template "pd.fullname" . }}
       labels:
-        heritage: {{ .Release.Service | quote }}
         release: {{ .Release.Name | quote }}
-        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
         app: {{ template "pd.name" . }}
+        cluster: {{ .Values.cluster }}
     spec:
 {{- if .Values.affinity }}
       affinity:

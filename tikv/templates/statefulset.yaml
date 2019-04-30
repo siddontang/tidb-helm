@@ -7,23 +7,22 @@ metadata:
     release: {{ .Release.Name | quote }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
     app: {{ template "tikv.name" . }}
+    cluster: {{ .Values.cluster }}
 spec:
   serviceName: {{ template "tikv.fullname" . }}
   replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      heritage: {{ .Release.Service | quote }}
       release: {{ .Release.Name | quote }}
-      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
       app: {{ template "tikv.name" . }}
+      cluster: {{ .Values.cluster }}
   template:
     metadata:
       name: {{ template "tikv.fullname" . }}
       labels:
-        heritage: {{ .Release.Service | quote }}
         release: {{ .Release.Name | quote }}
-        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
         app: {{ template "tikv.name" . }}
+        cluster: {{ .Values.cluster }}
     spec:
 {{- if .Values.affinity }}
       affinity:

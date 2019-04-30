@@ -5,6 +5,10 @@
 
 peerPort: 2380
 clientPort: 2379
+
+# Used as the "cluster" name for selection
+cluster: "tidb-cluster"
+
 component: "pd"
 replicas: 3
 image:

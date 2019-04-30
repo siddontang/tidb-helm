@@ -7,6 +7,7 @@ metadata:
     chart: {{ template "pd.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
+    cluster: {{ .Values.cluster }}
 spec:
   ports:
   - port: {{ .Values.peerPort }}
@@ -17,3 +18,4 @@ spec:
   selector:
     app: {{ template "pd.name" . }}
     release: {{ .Release.Name }}
+    cluster: {{ .Values.cluster }}

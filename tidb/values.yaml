@@ -7,6 +7,9 @@ serverPort: 4000
 statusPort: 10080
 pd: "pd-0.pd:2379"
 
+# Used as the "cluster" name for selection
+cluster: "tidb-cluster"
+
 component: "tidb"
 replicas: 3
 image:
