@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tidb-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: tidb-operator
+  template:
+    metadata:
+      labels:
+        name: tidb-operator
+    spec:
+      serviceAccountName: tidb-operator
+      containers:
+        - name: tidb-operator
+          # Replace this with the built image name
+          image: hub.pingcap.net/tangliu/tidb-operator:v0.0.1
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "tidb-operator"

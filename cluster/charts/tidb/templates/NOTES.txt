@@ -1,0 +1,1 @@
+TiDB has been installed.
