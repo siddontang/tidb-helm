@@ -70,3 +70,18 @@ kubectl delete -f deploy/role.yaml
 kubectl delete -f deploy/service_account.yaml
 kubectl delete -f deploy/crds/charts_v1alpha1_cluster_crd.yaml
 ```
+
+Notice, you may find that sometimes you cannot delete the customer resource. This problem is caused by the finalizer deadlock. 
+
+The following way may work:
+
+```bash
+kubectl patch Cluster/example-cluster -p '{"metadata":{"finalizers":[]}}' --type=merge
+kubectl patch crd/clusters.charts.helm.k8s.io -p '{"metadata":{"finalizers":[]}}' --type=merge
+```
+
+Some links may help you fix this problem:
+
+- https://github.com/kubernetes/kubernetes/issues/60538#issuecomment-369099998
+- https://rook.io/docs/rook/v0.8/ceph-teardown.html#troubleshooting
+
